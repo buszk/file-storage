@@ -4,6 +4,8 @@ use std::env::current_dir;
 use std::fs::{File, create_dir_all, OpenOptions, remove_file};
 use warp::{Buf, Filter};
 use std::thread;
+use clap::{Arg, App};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 fn create_file_safe(uri: String) -> Option<File> {
 
@@ -56,6 +58,19 @@ fn full(fname: String, mut body: impl Buf) -> String {
 
 #[tokio::main]
 async fn main() {
+    
+    let matches = App::new("file storage")
+        .version("0.1.0")
+        .author("Zekun Shen <bruceshenzk@gmail.com>")
+        .about("temporary file storage server")
+        .arg(Arg::with_name("addr")
+                 .long("addr")
+                 .takes_value(true)
+                 .help("Your ip address and port to bind"))
+        .get_matches();
+    
+    let addr_str = matches.value_of("addr").unwrap_or("127.0.0.1:8000");
+
 
     /* Create files directory if not exists */
     let files_dir: String = format!("{}/{}", current_dir().unwrap().display(), "files");
@@ -77,7 +92,7 @@ async fn main() {
     
     /* Spin up the server */
     warp::serve(all)
-        .run(([127, 0, 0, 1], 8000))
+        .run(addr_str.parse::<SocketAddr>().unwrap())
         .await;
         
 }
@@ -115,5 +130,5 @@ mod tests {
         let b = handle.join().unwrap();
         assert_ne!(a, b);
     }
-    
+
 }
