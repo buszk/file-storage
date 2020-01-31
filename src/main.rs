@@ -1,26 +1,53 @@
 // #![allow(warnings)]
 use std::io::Write;
 use std::env::current_dir;
-use std::fs::{File, create_dir_all};
-use std::path::Path;
+use std::fs::{File, create_dir_all, OpenOptions};
 use warp::{Buf, Filter};
+
+fn create_file_safe(uri: String) -> Option<File> {
+
+    println!("uri: {}", uri);
+
+    match OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(uri) {
+            Err(_) => {
+                None
+            }
+            Ok(f) => {
+                Some(f)
+            },
+        };
+    None
+}
 
 fn full(fname: String, mut body: impl Buf) -> String {
 
     let files_dir: String = format!("{}/{}", current_dir().unwrap().display(), "files");
     let uri: String = format!("{}/{}", files_dir, fname);
 
-    println!("uri: {}", uri);
-    if Path::new(&uri).exists() {
-        return String::from("Failed! File already exists.\n")
-    }
 
-    let mut temp = File::create(uri).unwrap();
+
+    let mut temp: File;
+    match create_file_safe(uri) {
+        None => {
+            return String::from("File exists!\n")
+        }
+        Some(f) => {
+            temp = f;
+        }
+    }
 
     while body.has_remaining() {
         let bs = body.bytes();
         let cnt = bs.len();
-        temp.write_all(bs).unwrap();
+        match temp.write_all(bs) {
+            Ok(_) => {},
+            Err(_) => {
+                return String::from("Upload failed!\n");
+            }
+        };
         body.advance(cnt);
         // println!("read {} bytes", cnt);
     }
