@@ -1,8 +1,9 @@
 // #![allow(warnings)]
 use std::io::Write;
 use std::env::current_dir;
-use std::fs::{File, create_dir_all, OpenOptions};
+use std::fs::{File, create_dir_all, OpenOptions, remove_file};
 use warp::{Buf, Filter};
+use std::thread;
 
 fn create_file_safe(uri: String) -> Option<File> {
 
@@ -12,22 +13,21 @@ fn create_file_safe(uri: String) -> Option<File> {
         .write(true)
         .create_new(true)
         .open(uri) {
-            Err(_) => {
-                None
+            Err(e) => {
+                println!("{}", e);
+                return None
             }
             Ok(f) => {
-                Some(f)
+                return Some(f)
             },
         };
-    None
+
 }
 
 fn full(fname: String, mut body: impl Buf) -> String {
 
     let files_dir: String = format!("{}/{}", current_dir().unwrap().display(), "files");
     let uri: String = format!("{}/{}", files_dir, fname);
-
-
 
     let mut temp: File;
     match create_file_safe(uri) {
@@ -80,4 +80,40 @@ async fn main() {
         .run(([127, 0, 0, 1], 8000))
         .await;
         
+}
+
+#[cfg(test)]
+mod tests {
+    /* Import symbols from outter scope */
+    use super::*;
+    fn remove_file_no_throw(path: String) {
+        match remove_file(path) {
+            Ok(_) => {},
+            Err(_) => {},
+        }
+    }
+    #[test]
+    fn test_create_file() {
+        remove_file_no_throw(String::from(".test_create"));
+        create_file_safe(String::from(".test_create")).unwrap();
+        remove_file(String::from(".test_create")).unwrap();
+    }
+    #[test]
+    fn test_create_multiple_files() {
+        remove_file_no_throw(String::from(".test_create_multiple"));
+        let handle = thread::spawn(move || {
+            match create_file_safe(String::from(".test_create_multiple")) {
+                Some(_) => 1,
+                None => 0,
+            }
+        });
+        let a = match create_file_safe(String::from(".test_create_multiple")) {
+            Some(_) => 1,
+            None => 0,
+        };
+        remove_file(String::from(".test_create_multiple")).unwrap();
+        let b = handle.join().unwrap();
+        assert_ne!(a, b);
+    }
+    
 }
