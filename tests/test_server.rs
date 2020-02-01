@@ -1,7 +1,8 @@
 use std::process::{Command, Child};
 use file_diff::diff;
-use std::fs::{File, remove_file};
+use std::fs::{File, remove_file, rename};
 use std::io::prelude::*;
+use std::path::Path;
 
 fn execute(cmd: String) -> Child{
     let child = if cfg!(target_os = "windows") {
@@ -66,8 +67,11 @@ fn test_download() {
     remove_file_no_throw(format!("{}/{}", dir, upload_fname));
     remove_file_no_throw(String::from("temp"));
 
-    let mut file = File::create(format!("{}/{}", dir, upload_fname)).unwrap();
-    file.write_all(b"Hello, world!").unwrap();
+    /* This fail under travis ci */
+    // let mut file = File::create(format!("{}/{}", dir, upload_fname)).unwrap();
+    // file.write_all(b"Hello, world!").unwrap();
+    std::fs::copy("tests/foo.txt", "files/foo.txt");
+
     execute(format!("curl -sS 127.0.0.1:8082/file/{} -o temp", upload_fname))
             .wait()
             .expect("crul download failed");
