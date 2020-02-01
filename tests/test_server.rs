@@ -34,19 +34,20 @@ fn test_server() {
 fn test_upload() {
     /* Start server */
     let mut p = Command::new("target/debug/file-storage")
-                        .arg("--addr=127.0.0.1:8081")
+                        .arg("--addr=127.0.0.1:8085")
                         .spawn()
                         .expect("failed to start server");
     let dir = String::from("files");
     let upload_fname = String::from ("gi");
     let fname = String::from(".gitignore");
     /* Upload */
-    remove_file(format!("{}/{}", dir, upload_fname)).unwrap();
+    remove_file_no_throw(format!("{}/{}", dir, upload_fname));
     
-    execute(format!("curl -sS --upload-file {} 127.0.0.1:8081/upload/{}", fname, upload_fname))
+    execute(format!("curl -sS --upload-file {} 127.0.0.1:8085/upload/{}", fname, upload_fname))
             .wait()
             .expect("curl upload failed");
     assert!(diff(fname.as_str(), format!("{}/{}", dir, upload_fname).as_str()));
+    remove_file(format!("{}/{}", dir, upload_fname)).unwrap();
 
     /* Stop server */
     p.kill().expect("!kill");
