@@ -72,7 +72,6 @@ fn test_download() {
     execute(String::from("curl 127.0.0.1:8082/file/test")).wait().expect("cat failed");
     assert!(diff("temp", "files/test"));
 
-    remove_file(format!("{}/{}", dir, upload_fname)).unwrap();
     remove_file(String::from("temp")).unwrap();
     
     /* Stop server */
