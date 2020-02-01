@@ -63,20 +63,15 @@ fn test_download() {
                         .expect("failed to start server");
     let dir = String::from("files");
     /* Download */
-    let upload_fname = String::from("foo.txt");
+    let upload_fname = String::from("test");
     remove_file_no_throw(format!("{}/{}", dir, upload_fname));
     remove_file_no_throw(String::from("temp"));
-
-    /* This fail under travis ci */
-    // let mut file = File::create(format!("{}/{}", dir, upload_fname)).unwrap();
-    // file.write_all(b"Hello, world!").unwrap();
-    std::fs::copy("tests/foo.txt", "files/foo.txt");
 
     execute(format!("curl -sS 127.0.0.1:8082/file/{} -o temp", upload_fname))
             .wait()
             .expect("crul download failed");
-    execute(String::from("curl 127.0.0.1:8082/file/foo.txt")).wait().expect("cat failed");
-    assert!(diff("temp", "files/foo.txt"));
+    execute(String::from("curl 127.0.0.1:8082/file/test")).wait().expect("cat failed");
+    assert!(diff("temp", "files/test"));
 
     remove_file(format!("{}/{}", dir, upload_fname)).unwrap();
     remove_file(String::from("temp")).unwrap();
