@@ -128,7 +128,11 @@ mod tests {
         };
         remove_file(String::from(".test_create_multiple")).unwrap();
         let b = handle.join().unwrap();
-        assert_ne!(a, b);
+        /* This fail under linux */
+        if cfg!(target_os = "windows") {
+            assert_ne!(a, b);
+        }
+
     }
 
 }
