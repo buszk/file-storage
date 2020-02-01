@@ -75,7 +75,7 @@ fn test_download() {
     execute(format!("curl -sS 127.0.0.1:8082/file/{} -o temp", upload_fname))
             .wait()
             .expect("crul download failed");
-    execute("cat temp").wait().expect("cat failed");
+    execute(String::from("cat temp")).wait().expect("cat failed");
     assert!(diff("temp", "files/foo.txt"));
 
     remove_file(format!("{}/{}", dir, upload_fname)).unwrap();
