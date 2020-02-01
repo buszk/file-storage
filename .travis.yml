@@ -11,3 +11,6 @@ jobs:
 script:
   - cargo build --verbose --all
   - cargo test --verbose --all
+
+before_install:
+  - sudo apt-get -y install curl
