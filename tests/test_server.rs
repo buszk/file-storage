@@ -1,8 +1,6 @@
 use std::process::{Command, Child};
 use file_diff::diff;
-use std::fs::{File, remove_file, rename};
-use std::io::prelude::*;
-use std::path::Path;
+use std::fs::remove_file;
 
 fn execute(cmd: String) -> Child{
     let child = if cfg!(target_os = "windows") {

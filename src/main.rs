@@ -1,29 +1,20 @@
 // #![allow(warnings)]
 use std::io::Write;
 use std::env::current_dir;
-use std::fs::{File, create_dir_all, OpenOptions, remove_file};
+use std::fs::{File, create_dir_all, OpenOptions};
+use std::str::FromStr;
 use warp::{Buf, Filter};
-use std::thread;
 use clap::{Arg, App};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::SocketAddr;
 
-fn create_file_safe(uri: String) -> Option<File> {
+fn create_file_safe(uri: &str) -> Result<File, std::io::Error> {
 
     println!("uri: {}", uri);
 
-    match OpenOptions::new()
+    OpenOptions::new()
         .write(true)
         .create_new(true)
-        .open(uri) {
-            Err(e) => {
-                println!("{}", e);
-                return None
-            }
-            Ok(f) => {
-                return Some(f)
-            },
-        };
-
+        .open(uri)
 }
 
 fn full(fname: String, mut body: impl Buf) -> String {
@@ -31,29 +22,20 @@ fn full(fname: String, mut body: impl Buf) -> String {
     let files_dir: String = format!("{}/{}", current_dir().unwrap().display(), "files");
     let uri: String = format!("{}/{}", files_dir, fname);
 
-    let mut temp: File;
-    match create_file_safe(uri) {
-        None => {
-            return String::from("File exists!\n")
-        }
-        Some(f) => {
-            temp = f;
-        }
-    }
-
+    let mut temp = match create_file_safe(&uri) {
+        Err(err) => return format!("Failed to create file with uri {}: {}", &uri, err),
+        Ok(f) => f,
+    };
     while body.has_remaining() {
-        let bs = body.bytes();
+        let bs = body.chunk();
         let cnt = bs.len();
-        match temp.write_all(bs) {
-            Ok(_) => {},
-            Err(_) => {
-                return String::from("Upload failed!\n");
-            }
-        };
+        if let Err(err) = temp.write_all(bs) {
+            return format!("Upload {} failed! Cannot write: {}", fname, err);
+        }
         body.advance(cnt);
         // println!("read {} bytes", cnt);
     }
-    String::from("File uploaded!\n")
+    String::from("Upload succeeded!\n")
 }
 
 #[tokio::main]
@@ -91,48 +73,23 @@ async fn main() {
     let all = file_server.or(upload_server).or(no_server);
     
     /* Spin up the server */
-    warp::serve(all)
-        .run(addr_str.parse::<SocketAddr>().unwrap())
-        .await;
-        
+    let server = warp::serve(all);
+    server.run(SocketAddr::from_str(addr_str).unwrap()).await;
+    
 }
 
 #[cfg(test)]
 mod tests {
+    use anyhow::Result;
+    use std::fs::remove_file;
     /* Import symbols from outter scope */
     use super::*;
-    fn remove_file_no_throw(path: String) {
-        match remove_file(path) {
-            Ok(_) => {},
-            Err(_) => {},
-        }
-    }
-    #[test]
-    fn test_create_file() {
-        remove_file_no_throw(String::from(".test_create"));
-        create_file_safe(String::from(".test_create")).unwrap();
-        remove_file(String::from(".test_create")).unwrap();
-    }
-    #[test]
-    fn test_create_multiple_files() {
-        remove_file_no_throw(String::from(".test_create_multiple"));
-        let handle = thread::spawn(move || {
-            match create_file_safe(String::from(".test_create_multiple")) {
-                Some(_) => 1,
-                None => 0,
-            }
-        });
-        let a = match create_file_safe(String::from(".test_create_multiple")) {
-            Some(_) => 1,
-            None => 0,
-        };
-        remove_file(String::from(".test_create_multiple")).unwrap();
-        let b = handle.join().unwrap();
-        /* This fail under linux */
-        if cfg!(target_os = "windows") {
-            assert_ne!(a, b);
-        }
 
+    #[test]
+    fn test_create_file() -> Result<()> {
+        remove_file(".test_create").ok();
+        create_file_safe(".test_create")?;
+        remove_file(".test_create")?;
+        Ok(())
     }
-
 }
