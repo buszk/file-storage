@@ -1,11 +1,14 @@
 // #![allow(warnings)]
-use std::io::Write;
+use std::io::{Write};
 use std::env::current_dir;
 use std::fs::{File, create_dir_all, OpenOptions};
 use std::str::FromStr;
+use futures::Stream;
+use futures::stream::StreamExt; // for `next`
 use warp::{Buf, Filter};
 use clap::{Arg, App};
 use std::net::SocketAddr;
+use futures_util;
 
 fn create_file_safe(uri: &str) -> Result<File, std::io::Error> {
 
@@ -17,25 +20,29 @@ fn create_file_safe(uri: &str) -> Result<File, std::io::Error> {
         .open(uri)
 }
 
-fn full(fname: String, mut body: impl Buf) -> String {
 
+async fn upload<S, B>(fname: String, stream: S) -> Result<impl warp::Reply, warp::Rejection>
+where
+    S: Stream<Item = Result<B, warp::Error>>,
+    B: Buf{
     let files_dir: String = format!("{}/{}", current_dir().unwrap().display(), "files");
     let uri: String = format!("{}/{}", files_dir, fname);
 
     let mut temp = match create_file_safe(&uri) {
-        Err(err) => return format!("Failed to create file with uri {}: {}", &uri, err),
+        Err(err) => return Ok(format!("Failed to create file with uri {}: {}", &uri, err)),
         Ok(f) => f,
     };
-    while body.has_remaining() {
-        let bs = body.chunk();
-        let cnt = bs.len();
-        if let Err(err) = temp.write_all(bs) {
-            return format!("Upload {} failed! Cannot write: {}", fname, err);
+    futures_util::pin_mut!(stream);
+    while let Some(data) = stream.next().await {
+        let mut data = data.unwrap();
+        while data.has_remaining() {
+            let bs = data.chunk();
+            let len = bs.len();
+            temp.write(bs).unwrap();
+            data.advance(len);
         }
-        body.advance(cnt);
-        // println!("read {} bytes", cnt);
     }
-    String::from("Upload succeeded!\n")
+    Ok(String::from("Upload succeeded!\n"))
 }
 
 #[tokio::main]
@@ -62,11 +69,10 @@ async fn main() {
     let file_server = warp::path("file")
         .and(warp::fs::dir(files_dir));
 
-    /* Upload server for upload */
     let upload_server = warp::path!("upload" / String)
         .and(warp::put())
-        .and(warp::body::aggregate())
-        .map(full);
+        .and(warp::body::stream())
+        .and_then(|f, s| upload(f, s));
     
     /* Wrong request */
     let no_server = warp::any().map(|| "Not found!\n");
