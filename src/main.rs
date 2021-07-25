@@ -1,30 +1,26 @@
 // #![allow(warnings)]
-use std::io::{Write};
-use std::env::current_dir;
-use std::fs::{File, create_dir_all, OpenOptions};
-use std::str::FromStr;
-use futures::Stream;
+use clap::{App, Arg};
 use futures::stream::StreamExt; // for `next`
-use warp::{Buf, Filter};
-use clap::{Arg, App};
-use std::net::SocketAddr;
+use futures::Stream;
 use futures_util;
+use std::env::current_dir;
+use std::fs::{create_dir_all, File, OpenOptions};
+use std::io::Write;
+use std::net::SocketAddr;
+use std::str::FromStr;
+use warp::{Buf, Filter};
 
 fn create_file_safe(uri: &str) -> Result<File, std::io::Error> {
-
     println!("uri: {}", uri);
 
-    OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(uri)
+    OpenOptions::new().write(true).create_new(true).open(uri)
 }
-
 
 async fn upload<S, B>(fname: String, stream: S) -> Result<impl warp::Reply, warp::Rejection>
 where
     S: Stream<Item = Result<B, warp::Error>>,
-    B: Buf{
+    B: Buf,
+{
     let files_dir: String = format!("{}/{}", current_dir().unwrap().display(), "files");
     let uri: String = format!("{}/{}", files_dir, fname);
 
@@ -47,41 +43,39 @@ where
 
 #[tokio::main]
 async fn main() {
-    
     let matches = App::new("file storage")
         .version("0.1.0")
         .author("Zekun Shen <bruceshenzk@gmail.com>")
         .about("temporary file storage server")
-        .arg(Arg::with_name("addr")
-                 .long("addr")
-                 .takes_value(true)
-                 .help("Your ip address and port to bind"))
+        .arg(
+            Arg::with_name("addr")
+                .long("addr")
+                .takes_value(true)
+                .help("Your ip address and port to bind"),
+        )
         .get_matches();
-    
-    let addr_str = matches.value_of("addr").unwrap_or("127.0.0.1:8000");
 
+    let addr_str = matches.value_of("addr").unwrap_or("127.0.0.1:8000");
 
     /* Create files directory if not exists */
     let files_dir: String = format!("{}/{}", current_dir().unwrap().display(), "files");
     create_dir_all(files_dir.clone()).unwrap();
 
     /* File server for download */
-    let file_server = warp::path("file")
-        .and(warp::fs::dir(files_dir));
+    let file_server = warp::path("file").and(warp::fs::dir(files_dir));
 
     let upload_server = warp::path!("upload" / String)
         .and(warp::put())
         .and(warp::body::stream())
         .and_then(|f, s| upload(f, s));
-    
+
     /* Wrong request */
     let no_server = warp::any().map(|| "Not found!\n");
     let all = file_server.or(upload_server).or(no_server);
-    
+
     /* Spin up the server */
     let server = warp::serve(all);
     server.run(SocketAddr::from_str(addr_str).unwrap()).await;
-    
 }
 
 #[cfg(test)]
