@@ -1,4 +1,5 @@
 // #![allow(warnings)]
+use anyhow::{self, Context};
 use clap::{App, Arg};
 use futures::stream::StreamExt; // for `next`
 use futures::Stream;
@@ -21,20 +22,31 @@ where
     S: Stream<Item = Result<B, warp::Error>>,
     B: Buf,
 {
+    match upload_impl(fname, stream).await {
+        Ok(reply) => Ok(reply),
+        Err(err) => Ok(format!("Error: {:#?}", err)),
+    }
+}
+
+async fn upload_impl<S, B>(fname: String, stream: S) -> Result<String, anyhow::Error>
+where
+    S: Stream<Item = Result<B, warp::Error>>,
+    B: Buf,
+{
     let files_dir: String = format!("{}/{}", current_dir().unwrap().display(), "files");
     let uri: String = format!("{}/{}", files_dir, fname);
 
-    let mut temp = match create_file_safe(&uri) {
-        Err(err) => return Ok(format!("Failed to create file with uri {}: {}", &uri, err)),
-        Ok(f) => f,
-    };
+    let mut temp = create_file_safe(&uri)
+        .with_context(|| format!("Failed to create file with uri {}", &uri))?;
+
     futures_util::pin_mut!(stream);
     while let Some(data) = stream.next().await {
-        let mut data = data.unwrap();
+        let mut data = data.with_context(|| "Cannot get data from stream".to_string())?;
         while data.has_remaining() {
             let bs = data.chunk();
             let len = bs.len();
-            temp.write(bs).unwrap();
+            temp.write(bs)
+                .with_context(|| format!("Cannot write to file {}", &uri))?;
             data.advance(len);
         }
     }
